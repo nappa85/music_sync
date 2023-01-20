@@ -3,7 +3,10 @@ use std::{io, path::PathBuf};
 use clap::Parser;
 
 use musicbrainz_rs::{
-    entity::{artist::Artist, release::Release},
+    entity::{
+        artist::{Artist, ArtistSearchQuery},
+        release_group::ReleaseGroup,
+    },
     Browse, Search,
 };
 
@@ -40,33 +43,33 @@ async fn scan(folder: PathBuf) -> io::Result<JoinSet<Result<(), Error>>> {
 }
 
 async fn check_artist(folder: PathBuf) -> Result<(), Error> {
-    // fucking blocking apis
-    tokio::task::spawn_blocking(move || {
-        let folder_name = folder.file_name().unwrap().to_str().unwrap();
-        let query = Artist::query_builder().name(folder_name).build();
-        let res = Artist::search(query).execute()?;
-        for artist in res.entities {
-            if !artist.name.eq_ignore_ascii_case(folder_name) {
-                debug!("Skipping artist {}", artist.name);
-                continue;
-            }
-            let res = Release::browse().by_artist(&artist.id).execute()?;
-            for release in res.entities {
-                let mut subfolder = folder.clone();
-                subfolder.push(format!(
-                    "{} - {}",
-                    release.date.unwrap_or_default().format("%Y"),
-                    release.title
-                ));
-                if !subfolder.exists() {
-                    error!("Missing album {}", subfolder.display());
-                }
+    let folder_name = folder.file_name().unwrap().to_str().unwrap();
+    let query = ArtistSearchQuery::query_builder()
+        .artist(folder_name)
+        .build();
+    let res = Artist::search(query).execute().await?;
+    for artist in res.entities {
+        if !artist.name.eq_ignore_ascii_case(folder_name) {
+            debug!("Skipping artist {}", artist.name);
+            continue;
+        }
+        let res = ReleaseGroup::browse()
+            .by_artist(&artist.id)
+            .execute()
+            .await?;
+        for release in res.entities {
+            let mut subfolder = folder.clone();
+            subfolder.push(format!(
+                "{} - {}",
+                release.first_release_date.unwrap_or_default().format("%Y"),
+                release.title
+            ));
+            if !subfolder.exists() {
+                error!("Missing album {}", subfolder.display());
             }
         }
-        Ok(())
-    })
-    .await
-    .unwrap()
+    }
+    Ok(())
 }
 
 #[tokio::main]
