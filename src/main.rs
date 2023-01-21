@@ -14,6 +14,7 @@ use tokio::{fs::read_dir, task::JoinSet};
 
 use tracing::{debug, error};
 
+#[derive(Debug)]
 enum Error {
     Musicbrainz(musicbrainz_rs::Error),
 }
@@ -24,26 +25,44 @@ impl From<musicbrainz_rs::Error> for Error {
     }
 }
 
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Musicbrainz(e) => e.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 struct Args {
     folder: PathBuf,
+    #[arg(short, long)]
+    artist: Option<String>,
 }
 
-async fn scan(folder: PathBuf) -> io::Result<JoinSet<Result<(), Error>>> {
+async fn scan(folder: PathBuf, artist: Option<String>) -> io::Result<JoinSet<Result<(), Error>>> {
     let mut dir = read_dir(folder).await?;
     let mut set = JoinSet::new();
     while let Some(entry) = dir.next_entry().await? {
         let path = entry.path();
         if path.is_dir() {
-            set.spawn(check_artist(path));
+            set.spawn(check_artist(path, artist.clone()));
         }
     }
     Ok(set)
 }
 
-async fn check_artist(folder: PathBuf) -> Result<(), Error> {
+async fn check_artist(folder: PathBuf, artist: Option<String>) -> Result<(), Error> {
     let folder_name = folder.file_name().unwrap().to_str().unwrap();
+    if let Some(artist) = artist {
+        if !artist.eq_ignore_ascii_case(folder_name) {
+            debug!("Filtering artist {}", artist);
+            return Ok(());
+        }
+    }
     let query = ArtistSearchQuery::query_builder()
         .artist(folder_name)
         .build();
@@ -72,7 +91,7 @@ async fn check_artist(folder: PathBuf) -> Result<(), Error> {
                     release.title
                 ));
                 if !subfolder.exists() {
-                    error!("Missing album {}", subfolder.display());
+                    println!("Missing album {}", subfolder.display());
                 }
             }
             offset += 100;
@@ -85,6 +104,12 @@ async fn check_artist(folder: PathBuf) -> Result<(), Error> {
 async fn main() {
     tracing_subscriber::fmt::init();
     let args = Args::parse();
-    let mut set = scan(args.folder).await.unwrap();
-    while set.join_next().await.is_some() {}
+    let mut set = scan(args.folder, args.artist).await.unwrap();
+    while let Some(res) = set.join_next().await {
+        match res {
+            Err(e) => error!("JoinError {e}"),
+            Ok(Err(e)) => error!("Error {e}"),
+            Ok(Ok(())) => {}
+        }
+    }
 }
