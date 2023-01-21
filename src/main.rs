@@ -53,20 +53,29 @@ async fn check_artist(folder: PathBuf) -> Result<(), Error> {
             debug!("Skipping artist {}", artist.name);
             continue;
         }
-        let res = ReleaseGroup::browse()
-            .by_artist(&artist.id)
-            .execute()
-            .await?;
-        for release in res.entities {
-            let mut subfolder = folder.clone();
-            subfolder.push(format!(
-                "{} - {}",
-                release.first_release_date.unwrap_or_default().format("%Y"),
-                release.title
-            ));
-            if !subfolder.exists() {
-                error!("Missing album {}", subfolder.display());
+
+        let mut offset = 0;
+        let mut count = 0;
+        while offset as i32 <= count {
+            let res = ReleaseGroup::browse()
+                .by_artist(&artist.id)
+                .limit(100)
+                .offset(offset)
+                .execute()
+                .await?;
+            count = res.count;
+            for release in res.entities {
+                let mut subfolder = folder.clone();
+                subfolder.push(format!(
+                    "{} - {}",
+                    release.first_release_date.unwrap_or_default().format("%Y"),
+                    release.title
+                ));
+                if !subfolder.exists() {
+                    error!("Missing album {}", subfolder.display());
+                }
             }
+            offset += 100;
         }
     }
     Ok(())
