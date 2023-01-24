@@ -6,6 +6,8 @@ use musicbrainz_rs::config;
 
 use once_cell::sync::Lazy;
 
+use tracing::error;
+
 mod command;
 mod error;
 mod queue;
@@ -36,7 +38,9 @@ async fn main() {
     let args = Args::parse();
     config::set_user_agent(&USER_AGENT);
     queue::init_queue(args.rate_limit.unwrap_or(1));
-    if let Ok(mut js) = queue::scan(args.folder, args.artist).await {
-        while js.join_next().await.is_some() {}
+    // scan returns a list of futures, we need to poll it
+    match queue::scan(args.folder, args.artist).await {
+        Ok(mut js) => while js.join_next().await.is_some() {},
+        Err(e) => error!("{e}"),
     }
 }

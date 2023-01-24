@@ -34,3 +34,7 @@ Missing album ./music/Katatonia/1996 - Brave Murder Day
 ```
 
 `rate_limit` parameter can be used to override the default rate limit of 1 request per second. Keep in mind that sending more than 1 request per second could end up with your IP being banned from MusicBrainz servers, to know more about rate limit read [the docs](https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting).
+
+## how it works
+
+This application relies on MusicBrainz APIs. First of all, it scans your root folder using folder names as artist names, and makes a single MusicBrainz search query for all artists to retrieve artist ids, then scans every artist subfolder, making a single MusicBrainz query for all existing artist albums, to translate found names into correct names. After that, it queries MusicBrainz again for artist's full album list, excludes from that list albums found on previous query, and prints the missing albums list.

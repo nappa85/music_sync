@@ -19,10 +19,6 @@ use crate::{command::Command, error::Error};
 // queue must be accessible from everywhere, but we need an input config parameter, so it can't be Lazy
 static QUEUE: OnceCell<mpsc::UnboundedSender<Command>> = OnceCell::new();
 
-pub fn get_queue() -> &'static mpsc::UnboundedSender<Command> {
-    QUEUE.get().unwrap()
-}
-
 pub fn init_queue(rate_limit: usize) {
     let (tx, rx) = mpsc::unbounded_channel::<Command>();
     tokio::spawn(async move {
@@ -41,9 +37,15 @@ pub fn init_queue(rate_limit: usize) {
     QUEUE.set(tx).unwrap();
 }
 
+// commodity function to not expose the static
+pub fn get_queue() -> &'static mpsc::UnboundedSender<Command> {
+    QUEUE.get().unwrap()
+}
+
 pub async fn scan(folder: PathBuf, artist: Option<String>) -> Result<JoinSet<()>, Error> {
-    let mut dir = read_dir(folder).await?;
-    let mut js = JoinSet::new();
+    // collect folder names
+    let mut dir = read_dir(&folder).await?;
+    let mut artists = Vec::new();
     while let Some(entry) = dir.next_entry().await? {
         let path = entry.path();
         if path.is_dir() {
@@ -54,33 +56,56 @@ pub async fn scan(folder: PathBuf, artist: Option<String>) -> Result<JoinSet<()>
                         continue;
                     }
                 }
-                let folder_name = folder_name.to_owned();
-                js.spawn(async move {
-                    let (tx, rx) = oneshot::channel();
-                    if get_queue().send(Command::Artist(folder_name, tx)).is_ok() {
-                        match rx.await {
-                            Ok(Ok(artists)) => {
-                                for artist in artists {
-                                    let (tx, rx) = oneshot::channel();
-                                    if get_queue()
-                                        .send(Command::Album(path.clone(), artist.id, 0, tx))
-                                        .is_ok()
-                                    {
-                                        match rx.await {
-                                            Ok(Ok(())) => {}
-                                            Ok(Err(e)) => error!("Album error: {e}"),
-                                            Err(e) => error!("Album error: {e}"),
-                                        }
-                                    }
-                                }
-                            }
-                            Ok(Err(e)) => error!("Artist error: {e}"),
-                            Err(e) => error!("Artist error: {e}"),
-                        }
-                    }
-                });
+                artists.push(folder_name.to_owned());
             }
         }
     }
+
+    // a big paged search query is potentially less calls than a call for every artist
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    get_queue()
+        .send(Command::Artists(artists.clone(), 0, tx))
+        .map_err(|_| Error::ChannelClosed)?;
+    let mut js = JoinSet::new();
+    while let Some(res) = rx.recv().await {
+        for artist in res? {
+            if let Some(pos) = artists
+                .iter()
+                .position(|a| a.eq_ignore_ascii_case(&artist.name))
+            {
+                let mut path = folder.clone();
+                path.push(artists.remove(pos));
+                if path.exists() {
+                    // spawn a new task instead of executing syncronously, this way we can achieve paralellism if an higher rate limit is used
+                    js.spawn(async move {
+                        let (tx, rx) = oneshot::channel();
+                        if get_queue()
+                            .send(Command::ExistingAlbum(path.clone(), artist.id, tx))
+                            .is_ok()
+                        {
+                            match rx.await {
+                                Ok(Ok(())) => {}
+                                Ok(Err(e)) => error!("{e}"),
+                                Err(e) => error!("{e}"),
+                            }
+                        }
+                    });
+                } else {
+                    error!(
+                        "Can't find folder for artist {}, probably you need to rename it",
+                        artist.name
+                    );
+                }
+            } else {
+                debug!("Ignoring artist {}", artist.name)
+            }
+        }
+    }
+
+    // remaining artists
+    if !artists.is_empty() {
+        error!("Artists not found: {}", artists.join(", "));
+    }
+
     Ok(js)
 }
