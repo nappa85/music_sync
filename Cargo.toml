@@ -7,7 +7,7 @@ repository = "https://github.com/nappa85/music_sync"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.1.3", features = ["derive"] }
+clap = { version = "4.1.4", features = ["derive"] }
 futures-util = "0.3.25"
 #musicbrainz_rs = { version = "0.5.0", default-features = false, features = ["async", "rustls"] }
 musicbrainz_rs = { git = "https://github.com/nappa85/musicbrainz_rs.git", branch = "pagination", default-features = false, features = ["async", "rustls"] }

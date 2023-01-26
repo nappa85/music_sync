@@ -25,9 +25,12 @@ static USER_AGENT: Lazy<String> = Lazy::new(|| {
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 struct Args {
+    /// Collection root folder
     folder: PathBuf,
+    /// Artist filter (can be specified multiple times)
     #[arg(short, long)]
-    artist: Option<String>,
+    artist: Option<Vec<String>>,
+    /// MusicBrainz API calls per second, default 1
     #[arg(short, long)]
     rate_limit: Option<usize>,
 }

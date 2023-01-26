@@ -8,11 +8,11 @@ Simple tool to scan a music collection and find missing albums.
 Usage: music_sync [OPTIONS] <FOLDER>
 
 Arguments:
-  <FOLDER>  
+  <FOLDER>  Collection root folder
 
 Options:
-  -a, --artist <ARTIST>          
-  -r, --rate-limit <RATE_LIMIT>  
+  -a, --artist <ARTIST>          Artist filter (can be specified multiple times)
+  -r, --rate-limit <RATE_LIMIT>  MusicBrainz API calls per second, default 1
   -h, --help                     Print help
   -V, --version                  Print version
 ```

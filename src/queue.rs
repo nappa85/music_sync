@@ -42,7 +42,7 @@ pub fn get_queue() -> &'static mpsc::UnboundedSender<Command> {
     QUEUE.get().unwrap()
 }
 
-pub async fn scan(folder: PathBuf, artist: Option<String>) -> Result<JoinSet<()>, Error> {
+pub async fn scan(folder: PathBuf, artist: Option<Vec<String>>) -> Result<JoinSet<()>, Error> {
     // collect folder names
     let mut dir = read_dir(&folder).await?;
     let mut artists = Vec::new();
@@ -51,8 +51,8 @@ pub async fn scan(folder: PathBuf, artist: Option<String>) -> Result<JoinSet<()>
         if path.is_dir() {
             if let Some(folder_name) = path.file_name().and_then(|s| s.to_str()) {
                 if let Some(artist) = &artist {
-                    if !artist.eq_ignore_ascii_case(folder_name) {
-                        debug!("Filtering artist {}", artist);
+                    if !artist.iter().any(|a| a.eq_ignore_ascii_case(folder_name)) {
+                        debug!("Filtering artist {folder_name}");
                         continue;
                     }
                 }
