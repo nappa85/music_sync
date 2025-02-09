@@ -1,8 +1,6 @@
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, sync::OnceLock, time::Duration};
 
 use futures_util::{stream::unfold, TryStreamExt};
-
-use once_cell::sync::OnceCell;
 
 use stream_throttle::{ThrottlePool, ThrottleRate, ThrottledStream};
 
@@ -17,7 +15,7 @@ use tracing::{debug, error};
 use crate::{command::Command, error::Error};
 
 // queue must be accessible from everywhere, but we need an input config parameter, so it can't be Lazy
-static QUEUE: OnceCell<mpsc::UnboundedSender<Command>> = OnceCell::new();
+static QUEUE: OnceLock<mpsc::UnboundedSender<Command>> = OnceLock::new();
 
 pub fn init_queue(rate_limit: usize) {
     let (tx, rx) = mpsc::unbounded_channel::<Command>();

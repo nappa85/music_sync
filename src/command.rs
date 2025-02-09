@@ -59,7 +59,6 @@ impl Command {
                             .send(Ok(res
                                 .entities
                                 .into_iter()
-                                .map(|entity| entity.inner)
                                 .collect()))
                             .map_err(|_| Error::ChannelClosed)?;
                         if (offset as i32) < res.count {
@@ -116,7 +115,7 @@ impl Command {
                                 folder,
                                 res.entities
                                     .into_iter()
-                                    .map(|release| release.inner.id)
+                                    .map(|release| release.id)
                                     .collect(),
                                 artist_id,
                                 0,
